@@ -1,7 +1,8 @@
-loadstring([==[
 -- language: Lua, file: universal_menu.lua, target: Roblox client (executor)
 -- tabbed menu: main / visuals / misc. main shows "made by nerex".
--- overlay: real-time fps + ping, top-right. toggle named "ping and fps".
+-- overlay: real-time fps + ping, top-right. RightShift toggles the menu.
+-- pages scroll when shrunk. bottom-right grip resizes. misc clips clean.
+-- speed/jump toggles restore defaults when turned off.
 
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
@@ -40,10 +41,30 @@ local function get_humanoid()
     return char:FindFirstChildOfClass("Humanoid")
 end
 
+-- remembers the character's natural WalkSpeed / JumpPower on load, so toggling
+-- off restores the game's own defaults instead of a hardcoded 16 / 50.
+local DEFAULT_WALK = 16
+local DEFAULT_JUMP = 50
+do
+    local boot_hum = get_humanoid()
+    if boot_hum then
+        if boot_hum.WalkSpeed > 0 then DEFAULT_WALK = boot_hum.WalkSpeed end
+        if boot_hum.JumpPower and boot_hum.JumpPower > 0 then
+            DEFAULT_JUMP = boot_hum.JumpPower
+        end
+    end
+end
+
 local function apply_hacks()
     local hum = get_humanoid()
     if not hum then return end
-    if CFG.speed_enabled then hum.WalkSpeed = CFG.speed end
+
+    if CFG.speed_enabled then
+        hum.WalkSpeed = CFG.speed
+    else
+        hum.WalkSpeed = DEFAULT_WALK
+    end
+
     if CFG.jump_enabled then
         if CFG.use_jump_height then
             hum.UseJumpPower = false
@@ -52,6 +73,10 @@ local function apply_hacks()
             hum.UseJumpPower = true
             hum.JumpPower    = CFG.jump
         end
+    else
+        hum.UseJumpPower = true
+        hum.JumpPower    = DEFAULT_JUMP
+        hum.JumpHeight   = 7.2
     end
 end
 
@@ -97,7 +122,7 @@ local function restore_fps_default()
 end
 
 -- ==========================================================================
--- PING — GetNetworkPing is the reliable source. Stats is a fallback.
+-- PING
 -- ==========================================================================
 local function get_ping()
     local ok, secs = pcall(function()
@@ -337,6 +362,7 @@ local function make_gui()
     frame.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
     frame.BorderSizePixel = 0
     frame.Active = false
+    frame.ClipsDescendants = true
     frame.Parent = gui
 
     local corner = Instance.new("UICorner")
@@ -369,7 +395,7 @@ local function make_gui()
     hint.Size = UDim2.new(1, -24, 0, 14)
     hint.Position = UDim2.new(0, 12, 0, 24)
     hint.BackgroundTransparency = 1
-    hint.Text = "drag header  ·  " .. CFG.toggle_key.Name .. " to toggle"
+    hint.Text = "drag header  ·  " .. CFG.toggle_key.Name .. " to show/hide"
     hint.TextColor3 = Color3.fromRGB(120, 120, 130)
     hint.Font = Enum.Font.Gotham
     hint.TextSize = 11
@@ -412,7 +438,9 @@ local function make_gui()
         end
     end)
 
-    -- resize grip
+    -- ======================================================================
+    -- RESIZE GRIP
+    -- ======================================================================
     local function build_resize_grip()
         local GRIP = 14
         local MIN_W, MIN_H = 220, 200
@@ -558,11 +586,19 @@ local function make_gui()
             select_tab(name)
         end)
 
-        local page = Instance.new("Frame")
+        local page = Instance.new("ScrollingFrame")
         page.Name = name .. "_page"
         page.Size = UDim2.new(1, -24, 1, -(PAGE_Y + 12))
         page.Position = UDim2.new(0, 12, 0, PAGE_Y)
         page.BackgroundTransparency = 1
+        page.BorderSizePixel = 0
+        page.ClipsDescendants = true
+        page.ScrollBarThickness = 4
+        page.ScrollBarImageColor3 = Color3.fromRGB(90, 150, 240)
+        page.ScrollBarImageTransparency = 0.2
+        page.ScrollingDirection = Enum.ScrollingDirection.Y
+        page.CanvasSize = UDim2.new(0, 0, 0, 0)
+        page.AutomaticCanvasSize = Enum.AutomaticSize.Y
         page.Visible = false
         page.Parent = frame
 
@@ -571,10 +607,12 @@ local function make_gui()
         return page
     end
 
-    -- builders
+    -- ======================================================================
+    -- BUILDERS
+    -- ======================================================================
     local function build_slider(parent, y, label_text, min, max, initial, on_change)
         local holder = Instance.new("Frame")
-        holder.Size = UDim2.new(1, 0, 0, 48)
+        holder.Size = UDim2.new(1, -6, 0, 48)
         holder.Position = UDim2.new(0, 0, 0, y)
         holder.BackgroundTransparency = 1
         holder.Parent = parent
@@ -702,7 +740,7 @@ local function make_gui()
 
     local function build_toggle(parent, y, label_text, state, on_change)
         local holder = Instance.new("Frame")
-        holder.Size = UDim2.new(1, 0, 0, 26)
+        holder.Size = UDim2.new(1, -6, 0, 26)
         holder.Position = UDim2.new(0, 0, 0, y)
         holder.BackgroundTransparency = 1
         holder.Parent = parent
@@ -761,24 +799,26 @@ local function make_gui()
 
     local function build_fps_row(parent, y)
         local holder = Instance.new("Frame")
-        holder.Size = UDim2.new(1, 0, 0, 32)
+        holder.Size = UDim2.new(1, -6, 0, 32)
         holder.Position = UDim2.new(0, 0, 0, y)
         holder.BackgroundTransparency = 1
+        holder.ClipsDescendants = true
         holder.Parent = parent
 
         local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(0, 76, 1, 0)
+        label.Size = UDim2.new(0.42, 0, 1, 0)
         label.BackgroundTransparency = 1
         label.Text = "fps unlocker"
         label.TextColor3 = Color3.fromRGB(210, 210, 215)
         label.Font = Enum.Font.GothamMedium
         label.TextSize = 12
         label.TextXAlignment = Enum.TextXAlignment.Left
+        label.TextTruncate = Enum.TextTruncate.AtEnd
         label.Parent = holder
 
         local box = Instance.new("TextBox")
         box.Size = UDim2.new(0, 52, 0, 24)
-        box.Position = UDim2.new(0, 78, 0.5, -12)
+        box.Position = UDim2.new(0.44, 0, 0.5, -12)
         box.BackgroundColor3 = Color3.fromRGB(34, 34, 40)
         box.BorderSizePixel = 0
         box.Text = tostring(CFG.fps_target)
@@ -806,14 +846,15 @@ local function make_gui()
         end)
 
         local apply = Instance.new("TextButton")
-        apply.Size = UDim2.new(0, 80, 0, 24)
-        apply.Position = UDim2.new(1, -80, 0.5, -12)
+        apply.Size = UDim2.new(0.36, 0, 0, 24)
+        apply.Position = UDim2.new(0.64, 0, 0.5, -12)
         apply.BackgroundColor3 = Color3.fromRGB(90, 150, 240)
         apply.BorderSizePixel = 0
         apply.Text = "apply"
         apply.TextColor3 = Color3.fromRGB(255, 255, 255)
         apply.Font = Enum.Font.GothamBold
         apply.TextSize = 12
+        apply.TextTruncate = Enum.TextTruncate.AtEnd
         apply.AutoButtonColor = false
         apply.Parent = holder
 
@@ -863,7 +904,7 @@ local function make_gui()
 
     -- main
     local credit = Instance.new("TextLabel")
-    credit.Size = UDim2.new(1, 0, 0, 18)
+    credit.Size = UDim2.new(1, -6, 0, 18)
     credit.Position = UDim2.new(0, 0, 0, 0)
     credit.BackgroundTransparency = 1
     credit.Text = "made by nerex"
@@ -918,9 +959,13 @@ end
 RunService.Heartbeat:Connect(function()
     local hum = get_humanoid()
     if not hum then return end
-    if CFG.speed_enabled and hum.WalkSpeed ~= CFG.speed then
-        hum.WalkSpeed = CFG.speed
+
+    if CFG.speed_enabled then
+        if hum.WalkSpeed ~= CFG.speed then
+            hum.WalkSpeed = CFG.speed
+        end
     end
+
     if CFG.jump_enabled then
         if CFG.use_jump_height then
             if hum.UseJumpPower or hum.JumpHeight ~= CFG.jump then
@@ -961,7 +1006,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end)
 
--- fps sampling: count frames over a fixed 0.5s wall-clock window
+-- fps sampling: 0.5s wall-clock window
 local fps_frames  = 0
 local fps_window  = 0
 local fps_current = 0
@@ -971,7 +1016,6 @@ local ping_accum   = 0
 local ping_current = nil
 
 RunService.RenderStepped:Connect(function(dt)
-    -- fps
     fps_frames = fps_frames + 1
     fps_window = fps_window + dt
     if fps_window >= 0.5 then
@@ -980,7 +1024,6 @@ RunService.RenderStepped:Connect(function(dt)
         fps_window  = 0
     end
 
-    -- ping (0.5s polling)
     ping_accum = ping_accum + dt
     if ping_accum >= 0.5 then
         local p = get_ping()
@@ -988,7 +1031,6 @@ RunService.RenderStepped:Connect(function(dt)
         ping_accum = 0
     end
 
-    -- paint overlay
     if CFG.fps_enabled and overlay_lbl then
         local ftext = (fps_current > 0) and tostring(fps_current) or "--"
         local ptext = ping_current and tostring(ping_current) or "--"
@@ -997,4 +1039,3 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 print("[universal menu] loaded — made by nerex")
-]==])()
